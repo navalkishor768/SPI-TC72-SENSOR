@@ -18,6 +18,6 @@ Following is the schematic of Proteus Simulation and demo video.
 
 https://drive.google.com/file/d/1Pq2NuR50hOBAehohzDUb80MoUh1_pF4K/view?usp=sharing
 
-![tc72_at32](https://user-images.githubusercontent.com/111571035/194107255-60f9b8c8-7152-4f24-8a04-47c54f4bb2e1.SVG)
+![tc72_at32](https://user-images.githubusercontent.com/111571035/194109737-5c14cec7-176d-45aa-bad5-815559a213fe.SVG)
 
 https://drive.google.com/file/d/1Pq2NuR50hOBAehohzDUb80MoUh1_pF4K/view?usp=sharing
