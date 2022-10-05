@@ -179,12 +179,14 @@ int main(void)
 		
 		if(flag_500ms == 1)
 		{
-			tc72_temperature = get_tc72_temperature();
+			
 			flag_500ms = 0;
 		}
 		
 		else if(flag_1000ms == 1)
 		{
+			tc72_temperature = get_tc72_temperature();
+			
 			 if(tc72_temperature >= 200)			// condition to print negative temperature values
 			{
 				tc72_temperature = (256.0-tc72_temperature)*(-1.0);
