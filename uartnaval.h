@@ -10,11 +10,10 @@
 #define UART_H_
 
 #include <avr/io.h>
-#include <string.h>
 
 
 //Function To Initialize the UART Module
-void uart_init();
+void uart_init(int n);
 
 //Function to tx a char
 void uart_tx(unsigned char ch);

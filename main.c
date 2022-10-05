@@ -12,12 +12,14 @@
 #include <compat/deprecated.h>
 #include "uartnaval.h"
 #include "uartnaval.c"
+#include "lcdgdheerajat8.h"
+#include "lcdgdheerajat8.c"
 
 #define MOSI		5
 #define SCK			7
 #define SS			4
 
-unsigned char str[20],str2[10];
+unsigned char str[20],str2[20];
 
 void spi_init()
 {
@@ -94,15 +96,38 @@ int main(void)
 {
 	float tc72_temperature;
 	
-	DDRA = 0xff;
-	PORTB = 0x00;
-	
 	/* Replace with your application code */
+	
+	lcd_init(LCD_DISP_ON);
+	_delay_ms(10);
+	
+	lcd_clrscr();
+	lcd_putsxy(0,0,"Initializing");
+	_delay_ms(100);
+	
 	spi_init();
+	
+	lcd_clrscr();
+	lcd_putsxy(0,0,"Initializing");
+	lcd_putsxy(0,1,"SPI Init");
+	_delay_ms(100);
 	
 	tc72Init();
 	
-	uart_init();	
+	lcd_clrscr();
+	lcd_putsxy(0,0,"Initializing");
+	lcd_putsxy(0,1,"TC72 Init");
+	_delay_ms(100);
+	
+	uart_init(9600);
+	
+	lcd_clrscr();
+	lcd_putsxy(0,0,"Initializing");
+	lcd_putsxy(0,1,"UART Init");
+	_delay_ms(100);
+	
+	lcd_clrscr();
+	
 	
 	while (1)
 	{
@@ -127,14 +152,35 @@ int main(void)
 			sprintf(str,"Temperature is %s",str2);
 		}
 		
+		uart_txstr(str);
 		
-		uart_txstr(str);							
-
+		if(tc72_temperature < 0.0)
+		{
+			tc72_temperature = tc72_temperature*(-1);
+			
+			dtostrf(tc72_temperature,3,2,str2);
+		
+			lcd_putsxy(0,0,"Temperature");
+			lcd_putsxy(0,1,"-");
+			lcd_putsxy(1,1,str2);
+			lcd_putsxy(8,1,"Celsius");
+		
+		}	
+		
+		else
+		{
+			dtostrf(tc72_temperature,3,2,str2);
+			lcd_putsxy(0,0,"Temperature");
+			lcd_putsxy(0,1,str2);
+			lcd_putsxy(8,1,"Celsius");					
+		}
 		uart_tx('\r');
 		
 		_delay_ms(500);
+		lcd_clrscr();
 		
 	}
 }
+
 
 
