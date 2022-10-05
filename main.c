@@ -10,6 +10,7 @@
 #include <avr/io.h>
 #include <util/delay.h>
 #include <compat/deprecated.h>
+#include <avr/interrupt.h>
 #include "uartnaval.h"
 #include "uartnaval.c"
 #include "lcdgdheerajat8.h"
@@ -19,9 +20,44 @@
 #define SCK			7
 #define SS			4
 
-unsigned char str[20],str2[20];
+unsigned char str[20],str2[10];
+volatile int flag_1000ms=0;
+volatile int flag_500ms=0;
 
-void spi_init()
+
+void init_t2()
+{
+	TCCR2 = 0x07;			//	PRESCALAR AS 1024
+	TCNT2 = 240;			//  initialize counter for 1 ms
+	TIMSK |= (1 << TOIE2);	//	Unmask Timer 2 overflow interrupt.
+}
+
+ISR(TIMER2_OVF_vect)
+{
+	static unsigned int count_1000ms=0;
+	static unsigned int count_500ms=0;
+	
+	if(count_500ms == 500)
+	{
+		flag_500ms = 1;
+		count_500ms = 0;
+	}
+	
+	if(count_1000ms == 1000)
+	{
+		flag_1000ms = 1;
+		count_1000ms = 0;
+	}
+	
+
+	count_500ms++;
+	count_1000ms++;
+	TCNT2 = 240;
+}
+
+
+
+void spi_init(void)
 {
 	DDRB = (1<<MOSI)|(1<<SCK)|(1<<SS);  // set pin direction output
 	SPCR = (1<<SPE)|(1<<MSTR)|(1<<SPR0)|(1<<CPHA);  // clock polarity set to 1, presaclar 128
@@ -126,60 +162,81 @@ int main(void)
 	lcd_putsxy(0,1,"UART Init");
 	_delay_ms(100);
 	
+	init_t2();
+	
+	lcd_clrscr();
+	lcd_putsxy(0,0,"Initializing");
+	lcd_putsxy(0,1,"Timer2 Init");
+	_delay_ms(100);
+	
+	sei();
+	
 	lcd_clrscr();
 	
 	
 	while (1)
 	{
-		tc72_temperature = get_tc72_temperature();
 		
-		if(tc72_temperature >= 200)			// condition to print negative temperature values
+		if(flag_500ms == 1)
 		{
-			tc72_temperature = (256.0-tc72_temperature)*(-1.0);
-			
-			dtostrf(tc72_temperature,3,2,str2);
-			
-			sprintf(str,"Temperature is %s",str2);
+			tc72_temperature = get_tc72_temperature();
+			flag_500ms = 0;
 		}
 		
-		else 
-		{	/* if temperature is positive, same will be printed,
+		else if(flag_1000ms == 1)
+		{
+			 if(tc72_temperature >= 200)			// condition to print negative temperature values
+			{
+				tc72_temperature = (256.0-tc72_temperature)*(-1.0);
+			
+				dtostrf(tc72_temperature,3,2,str2);
+			
+				sprintf(str,"Temperature is %s",str2);
+			}
+		
+			else 
+			{	/* if temperature is positive, same will be printed,
 				converting temperature to string format
-			*/
+				*/
 		
-			dtostrf(tc72_temperature,3,2,str2);
+				dtostrf(tc72_temperature,3,2,str2);
 			
-			sprintf(str,"Temperature is %s",str2);
+				sprintf(str,"Temperature is %s",str2);
+			}
+		
+			uart_txstr(str);
+			
+			lcd_clrscr();
+		 
+			if(tc72_temperature < 0.0)
+			{
+				tc72_temperature = tc72_temperature*(-1);
+			
+				dtostrf(tc72_temperature,3,2,str2);
+		
+				lcd_putsxy(0,0,"Temperature");
+				lcd_putsxy(0,1,"-");
+				lcd_putsxy(1,1,str2);
+				lcd_putsxy(8,1,"Celsius");
+		
+			}	
+		
+			else
+			{
+				dtostrf(tc72_temperature,3,2,str2);
+				lcd_putsxy(0,0,"Temperature");
+				lcd_putsxy(0,1,str2);
+				lcd_putsxy(8,1,"Celsius");					
+			}
+			uart_tx('\r');
+			
+		
 		}
 		
-		uart_txstr(str);
-		
-		if(tc72_temperature < 0.0)
-		{
-			tc72_temperature = tc72_temperature*(-1);
-			
-			dtostrf(tc72_temperature,3,2,str2);
-		
-			lcd_putsxy(0,0,"Temperature");
-			lcd_putsxy(0,1,"-");
-			lcd_putsxy(1,1,str2);
-			lcd_putsxy(8,1,"Celsius");
-		
-		}	
-		
-		else
-		{
-			dtostrf(tc72_temperature,3,2,str2);
-			lcd_putsxy(0,0,"Temperature");
-			lcd_putsxy(0,1,str2);
-			lcd_putsxy(8,1,"Celsius");					
-		}
-		uart_tx('\r');
-		
-		_delay_ms(500);
-		lcd_clrscr();
-		
+		flag_1000ms = 0;
 	}
+		
+		
 }
 
 
