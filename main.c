@@ -23,6 +23,7 @@
 unsigned char str[20],str2[10];
 volatile int flag_1000ms=0;
 volatile int flag_500ms=0;
+int celsius2Fah=0;
 
 
 void init_t2()
@@ -55,7 +56,18 @@ ISR(TIMER2_OVF_vect)
 	TCNT2 = 240;
 }
 
-
+ISR(INT0_vect)
+{
+	if(celsius2Fah == 1)
+	{
+		celsius2Fah = 0;
+	}	
+	
+	else if(celsius2Fah == 0)
+	{
+		celsius2Fah = 1;
+	}
+}
 
 void spi_init(void)
 {
@@ -86,13 +98,13 @@ char spi_read()
 
 void tc72Init(void){
 	
-	cbi(PORTB,SS);             // chip enable, TC72 is CS pin is active high
+	cbi(PORTB,SS);			// chip enable, TC72 is CS pin is active high
 	
-	spi_tx(0x80);
-	/*Select Continuous temperature Conversion*/
-	spi_tx(0x04);
-	sbi(PORTB,SS);				// chip enable, TC72 is CS pin is active high
-	_delay_ms(150);
+	spi_tx(0x80);			//  Control Address
+	
+	spi_tx(0x04);			// Set Control Address for Continuous conversion
+	sbi(PORTB,SS);			// chip enable, TC72 is CS pin is active high
+
 }
 
 float get_tc72_temperature()
@@ -103,7 +115,7 @@ float get_tc72_temperature()
 	
 	cbi(PORTB,SS);						// chip enable, TC72 is CS pin is active high
 	
-	spi_tx(0x01);						// address of MSB
+	spi_tx(0x01);						// address of LSB
 	
 	spi_tx(0x00);						// dummy flush to read with SCK cycle
 	
@@ -121,7 +133,7 @@ float get_tc72_temperature()
 	
 	sbi(PORTB,SS);						// chip enable, TC72 is CS pin is active high
 	
-	tc72_raw[1]=spi_read();             // reading received data from spi buffer to char variable
+	tc72_raw[1]=spi_read();             // reading received data from spi buffer to unsigned char variable
 	
 	tc72_measured = tc72_raw[1] + (tc72_raw[0]>>6)*0.25 ;     // converting received 8 bit to int
 	
@@ -132,7 +144,12 @@ int main(void)
 {
 	float tc72_temperature;
 	
+	
 	/* Replace with your application code */
+	/* Init External Interrupt on PORTD2 */
+	
+	sbi(PORTD,2);
+	GICR = (1<<INT0);
 	
 	lcd_init(LCD_DISP_ON);
 	_delay_ms(10);
@@ -169,7 +186,10 @@ int main(void)
 	lcd_putsxy(0,1,"Timer2 Init");
 	_delay_ms(100);
 	
-	sei();
+	cbi(DDRB,0); //  PORTB Pin 0 enable for input
+	sbi(PINB,0); //  PINB 0 set to internal pull up 
+	
+	sei();       //  Global interrupt enable
 	
 	lcd_clrscr();
 	
@@ -179,66 +199,69 @@ int main(void)
 		
 		if(flag_500ms == 1)
 		{
+			tc72_temperature = get_tc72_temperature();
+			/* as per datasheet of TC72, temperature in minus goes from 255 to 200 */
+			/*hence we have used following if condition to get temperture in negative */
+			/* 255 = -1 Degree Celsius, 254 = -2 Degree Celsius and so on....till -55 i.e. last range of TC72 sensor*/ 
+			
+			 if(tc72_temperature >= 200)			// condition to get negative temperature values
+			 {
+				 tc72_temperature = (256.0-tc72_temperature)*(-1.0);
+			 }
 			
 			flag_500ms = 0;
 		}
 		
-		else if(flag_1000ms == 1)
+		else if(flag_1000ms == 1 && celsius2Fah == 1)
 		{
-			tc72_temperature = get_tc72_temperature();
+			/*converting temperature to string format
+			*/
+			dtostrf(tc72_temperature,3,2,str2);
 			
-			 if(tc72_temperature >= 200)			// condition to print negative temperature values
-			{
-				tc72_temperature = (256.0-tc72_temperature)*(-1.0);
+			sprintf(str,"Temperature is %s Celsius",str2);
 			
-				dtostrf(tc72_temperature,3,2,str2);
-			
-				sprintf(str,"Temperature is %s",str2);
-			}
-		
-			else 
-			{	/* if temperature is positive, same will be printed,
-				converting temperature to string format
-				*/
-		
-				dtostrf(tc72_temperature,3,2,str2);
-			
-				sprintf(str,"Temperature is %s",str2);
-			}
-		
+			/*print string on terminal */
 			uart_txstr(str);
 			
 			lcd_clrscr();
-		 
-			if(tc72_temperature < 0.0)
-			{
-				tc72_temperature = tc72_temperature*(-1);
+			/* print temperature on lcd */
+			dtostrf(tc72_temperature,3,2,str2);
+			lcd_putsxy(0,0,"Temperature");
+			lcd_putsxy(0,1,str2);
+			lcd_putsxy(8,1,"Celsius");					
+			uart_tx('\r');		// go to next line on terminal
 			
-				dtostrf(tc72_temperature,3,2,str2);
-		
-				lcd_putsxy(0,0,"Temperature");
-				lcd_putsxy(0,1,"-");
-				lcd_putsxy(1,1,str2);
-				lcd_putsxy(8,1,"Celsius");
-		
-			}	
-		
-			else
-			{
-				dtostrf(tc72_temperature,3,2,str2);
-				lcd_putsxy(0,0,"Temperature");
-				lcd_putsxy(0,1,str2);
-				lcd_putsxy(8,1,"Celsius");					
-			}
-			uart_tx('\r');
-			
+			flag_1000ms = 0;
 		
 		}
 		
-		flag_1000ms = 0;
+		else if(flag_1000ms == 1 && celsius2Fah == 0)
+		{			
+			
+			/*	converting temperature to string format
+			*/
+			tc72_temperature = tc72_temperature * 1.8 + 32.00;		
+			dtostrf(tc72_temperature,3,2,str2);
+			
+			sprintf(str,"Temperature is %s Fahrenheit",str2);
+		
+			/*print string on terminal */
+			uart_txstr(str);
+			
+			lcd_clrscr();
+			/* print temperature on lcd */
+			
+			dtostrf(tc72_temperature,3,2,str2);
+			lcd_putsxy(0,0,"Temperature");
+			lcd_putsxy(0,1,str2);
+			lcd_putsxy(8,1,"Fah");					
+
+			uart_tx('\r'); // go to next line on terminal
+			
+			flag_1000ms = 0;
+		
+		}
 	}
-		
-		
 }
 
 
